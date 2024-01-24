@@ -1,0 +1,149 @@
+import requests
+import pandas as pd
+import os
+import logging
+from dateutil.parser import parse
+from datetime import datetime
+
+logging.basicConfig(level=logging.DEBUG)
+
+def fetch_data_with_pagination(api_url, token):
+    all_data = []
+    cursor = 0
+    total_records = None
+    headers = {'Authorization': f'Bearer {token}'}
+
+    while total_records is None or cursor < total_records:
+        try:
+            params = {'cursor': cursor, 'limit': 100}
+            response = requests.get(api_url, headers=headers, params=params)
+            response.raise_for_status()
+
+            data = response.json()
+            records = data['response']['results']
+            all_data.extend(records)
+            
+            if total_records is None:
+                total_records = data['response']['remaining'] + len(records)
+            cursor += len(records)
+
+        except requests.exceptions.HTTPError as err:
+            print(f"HTTP error occurred: {err}")
+            break
+        except Exception as err:
+            print(f"Error occurred: {err}")
+            break
+
+    return all_data
+
+def save_to_excel(data, sheet_name, file_path):
+    df = pd.DataFrame(data)
+    mode = 'a' if os.path.exists(file_path) else 'w'
+    excel_writer_args = {'mode': mode, 'engine': 'openpyxl'}
+    if mode == 'a':
+        excel_writer_args['if_sheet_exists'] = 'replace'
+
+    try:
+        with pd.ExcelWriter(file_path, **excel_writer_args) as writer:
+            df.to_excel(writer, sheet_name=sheet_name)
+    except Exception as e:
+        print(f"An error occurred while saving to Excel: {e}")
+
+# API Endpoints and tokens
+base_api_url = 'https://edoofa-portal.bubbleapps.io/version-test/api/1.1/obj/'
+edoofy_api_engagement = base_api_url + 'engagement'
+edoofy_api_student = base_api_url + 'student'
+edoofy_token = '2cde31d8f48919a2db1467cc06a56132'
+
+ums_api_url = 'https://edoofa-ums-90164.bubbleapps.io/version-test/api/1.1/obj/dsw-session'
+ums_token = '8caeed4a8be2be66b70a76bcd486d4bb'
+
+# Fetching Engagement Data
+engagement_data = fetch_data_with_pagination(edoofy_api_engagement, edoofy_token)
+
+# Convert engagement_data to DataFrame
+engagement_data = pd.DataFrame(engagement_data)
+
+# Fetching Student Data
+student_data = fetch_data_with_pagination(edoofy_api_student, edoofy_token)
+
+# Fetching dsw-session Data
+dsw_session_data = fetch_data_with_pagination(ums_api_url, ums_token)
+
+# File path for Excel file
+file_path = 'C:\\Users\\ayush\\Documents\\UMS\\bubble_data.xlsx'
+
+# Convert student_data to DataFrame
+student_data = pd.DataFrame(student_data)
+
+# Convert dsw_session_data to DataFrame
+dsw_session_data = pd.DataFrame(dsw_session_data)
+print(dsw_session_data.columns)
+
+# Convert engagement_data to DataFrame
+engagement_data = pd.DataFrame(engagement_data)
+print(engagement_data.columns)
+
+# Check if the DataFrames are not empty and then save to Excel
+if not engagement_data.empty:
+    save_to_excel(engagement_data, 'engagement data', file_path)
+
+if not student_data.empty:
+    save_to_excel(student_data, 'student data', file_path)
+
+if not dsw_session_data.empty:
+    save_to_excel(dsw_session_data, 'dsw-session data', file_path)
+
+# Strip any leading/trailing spaces from column names
+dsw_session_data.columns = dsw_session_data.columns.str.strip()
+engagement_data.columns = engagement_data.columns.str.strip()
+
+# Create mappings with correct column names
+ewyl_to_id_mapping = dict(zip(student_data['EWYL-group-name'], student_data['_id']))
+id_to_ewyl_mapping = {v: k for k, v in ewyl_to_id_mapping.items()}
+
+# Function to update data in Bubble
+def update_bubble_data(api_url, token, record_id, data):
+    headers = {'Authorization': f'Bearer {token}'}
+    response = requests.patch(f"{api_url}/{record_id}", headers=headers, json=data)
+    if response.status_code == 200:
+        logging.info(f"Record {record_id} updated successfully")
+    else:
+        logging.error(f"Failed to update record {record_id}. Status Code: {response.status_code}, Response: {response.text}")
+
+# Initialize a list to store the _id of updated rows for uploading in engagement table
+updated_ids = []
+
+# Update Engagement Data and Update Id
+for index, row in engagement_data.iterrows():
+    student_id = row['student']
+    ewyl_group_name = id_to_ewyl_mapping.get(student_id)
+
+    # Parse and compare only the date part, ignoring the time
+    engagement_date = datetime.strptime(row['engagement-date'], '%Y-%m-%dT%H:%M:%S.%fZ').date()
+
+    for i, dsw_row in dsw_session_data.iterrows():
+        # Parse dsw_row['date'] in ISO 8601 format
+        dsw_date = datetime.strptime(dsw_row['date'], '%Y-%m-%dT%H:%M:%S.%fZ').date()
+
+        if dsw_row['ewyl-group-name'] == ewyl_group_name and dsw_date == engagement_date:
+            engagement_data.at[index, 'dsw-session-feedback'] = dsw_row['session-feedback']
+            engagement_data.at[index, 'dsw-session-feedback-rating'] = dsw_row['session-rating']
+            engagement_data.at[index, 'dsw-session-feedback-date'] = dsw_row['Modified Date']
+            updated_ids.append(row['_id'])
+            break
+    else:
+        print(f"No match found for Student ID: {student_id}, EWYL-group-name: {ewyl_group_name}, Date: {row['engagement-date']}")
+
+# Update only the records in Bubble that were modified
+for record_id in set(updated_ids):
+    row = engagement_data.loc[engagement_data['_id'] == record_id].iloc[0]
+    update_data = {
+        'dsw-session-feedback': row['dsw-session-feedback'],
+        'dsw-session-feedback-rating': row['dsw-session-feedback-rating'],
+        'dsw-session-feedback-date': row['dsw-session-feedback-date']
+    }
+    update_bubble_data(edoofy_api_engagement, edoofy_token, record_id, update_data)
+
+# Save Updated Engagement Data to Excel
+save_to_excel(engagement_data, 'updated engagement data', file_path)
