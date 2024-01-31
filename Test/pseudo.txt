@@ -1,0 +1,14 @@
+1. fetch data from bubble
+2. map and process data
+3. student, eng_all, eng_this_month, eng_last_month, ums_att, ums_summary
+4. get_percentage function (num of True/total session) * 100
+5. process engagement data.
+	-get max date from att_ums
+	-get max date from eng
+	-find delta data, populate new_dataframe
+	-if new_dataframe is not empty, POST data in ums_att
+6. patch and post functions for ums_summary
+7. check if row exists in ums_summary
+8. if True, patch attendance column after calling get_percentage in ums_summary
+9. if False, post row data after in ums_summary
+10.  
