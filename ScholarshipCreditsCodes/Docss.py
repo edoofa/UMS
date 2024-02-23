@@ -215,7 +215,7 @@ def bulk_upload_to_bubble(api_endpoint, headers, data, batch_size=1000):
 
 def main():
     service = google_drive_auth()
-    parent_folder_id = '1bFO04dkxw5HFCcZ3JykEYyJhIjZUcHev'
+    parent_folder_id = '1bg8OmaJMtnv3vRHK_RYPxR8RJA-JEr4g'
     df_columns = ['admissions-group-name', 'doc-type', 'document-link', 'fileorfolder-id', 'folder-link', 'name', 'status', 'uploaded-date', 'file']
     df = pd.DataFrame(columns=df_columns)
 
