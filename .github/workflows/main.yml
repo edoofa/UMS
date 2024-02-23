@@ -8,8 +8,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      with:
-        ref: 'main'
 
     - name: Set up Python
       uses: actions/setup-python@v2
@@ -17,9 +15,7 @@ jobs:
         python-version: '3.x'
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # Add any other dependencies your script needs here
+      run: pip install -r requirements.txt
 
     - name: Run Docss.py
       run: python ScholarshipCreditsCodes/Docss.py
