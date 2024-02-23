@@ -17,7 +17,9 @@ jobs:
     - name: Install dependencies
       run: pip install -r ScholarshipCreditsCodes/requirements.txt
 
-    - name: Run Docss.py
-      run: python ScholarshipCreditsCodes/Docss.py
+    - name: Change directory and run Docss.py
+      run: |
+        cd ScholarshipCreditsCodes
+        python Docss.py
       env:
         GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/ScholarshipCreditsCodes/credentials.json
